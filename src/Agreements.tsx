@@ -228,9 +228,10 @@ function AgreementCard({ a }: { a: Agreement }) {
 
 // ─── Main Agreements view ────────────────────────────────────────────────
 
-export default function Agreements() {
+export default function Agreements({ onNewAgreement }: { onNewAgreement?: () => void } = {}) {
   const [filter, setFilter] = useState<Filter>('all')
   const [creating, setCreating] = useState(false)
+  const triggerCreate = onNewAgreement ?? (() => setCreating(true))
 
   const filtered = useMemo(() => {
     const cfg = filterConfig.find((f) => f.key === filter)!
@@ -277,7 +278,7 @@ export default function Agreements() {
         })}
         <div className="flex-1" />
         <button
-          onClick={() => setCreating(true)}
+          onClick={triggerCreate}
           className="inline-flex items-center gap-1.5 rounded-[10px] border border-hairline bg-surface px-3 py-1.5 text-[12.5px] font-medium text-ink hover:border-ink-faint"
         >
           <Plus size={12} strokeWidth={2} />

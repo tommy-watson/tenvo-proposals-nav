@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import CMABuilder from './CMABuilder'
 import SendPreview from './SendPreview'
 import {
@@ -659,6 +659,184 @@ function AppraisalCard({ a, active, onClick }: { a: Appraisal; active: boolean; 
   )
 }
 
+type AddressSuggestion = {
+  address: string
+  suburb: string
+  postcode: string
+  source: 'Recent appraisal' | 'On market' | 'Recent sale'
+  beds?: number
+  baths?: number
+  cars?: number
+  land?: number
+  type?: string
+}
+
+const addressSuggestions: AddressSuggestion[] = (() => {
+  const seen = new Set<string>()
+  const out: AddressSuggestion[] = []
+  for (const a of recentAppraisals) {
+    const key = `${a.address}|${a.suburb}`.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({
+      address: a.address,
+      suburb: a.suburb,
+      postcode: a.postcode,
+      source: 'Recent appraisal',
+      beds: a.beds,
+      baths: a.baths,
+      cars: a.cars,
+      land: a.land,
+      type: a.type,
+    })
+  }
+  for (const m of marketPool) {
+    const key = `${m.address}|${m.suburb}`.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({
+      address: m.address,
+      suburb: m.suburb,
+      postcode: m.postcode,
+      source: m.kind === 'sold' ? 'Recent sale' : 'On market',
+      beds: m.beds,
+      baths: m.baths,
+      cars: m.cars,
+      land: m.land,
+      type: m.type,
+    })
+  }
+  return out
+})()
+
+function AddressAutosuggest({
+  value,
+  onChange,
+  onPick,
+}: {
+  value: string
+  onChange: (v: string) => void
+  onPick: (s: AddressSuggestion) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [highlight, setHighlight] = useState(0)
+  const wrapRef = useRef<HTMLDivElement>(null)
+
+  const matches = useMemo(() => {
+    const q = value.trim().toLowerCase()
+    if (!q) return []
+    return addressSuggestions
+      .filter((s) => {
+        const hay = `${s.address} ${s.suburb} ${s.postcode}`.toLowerCase()
+        return hay.includes(q)
+      })
+      .slice(0, 6)
+  }, [value])
+
+  useEffect(() => {
+    setHighlight(0)
+  }, [value])
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [])
+
+  const choose = (s: AddressSuggestion) => {
+    onPick(s)
+    setOpen(false)
+  }
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
+      <input
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value)
+          setOpen(true)
+        }}
+        onFocus={() => value.trim() && setOpen(true)}
+        onKeyDown={(e) => {
+          if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+            setOpen(true)
+            return
+          }
+          if (!open) return
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setHighlight((h) => Math.min(h + 1, matches.length - 1))
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setHighlight((h) => Math.max(h - 1, 0))
+          } else if (e.key === 'Enter' && matches[highlight]) {
+            e.preventDefault()
+            choose(matches[highlight])
+          } else if (e.key === 'Escape') {
+            setOpen(false)
+          }
+        }}
+        placeholder="Start typing an address…"
+        className={inputCls + ' pl-9'}
+      />
+      {open && value.trim() && (
+        <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 overflow-hidden rounded-[12px] border border-hairline bg-surface shadow-[var(--shadow-pop)]">
+          {matches.length === 0 ? (
+            <div className="px-3 py-2.5 text-[12.5px] text-ink-muted">
+              No local matches — keep typing to enter manually
+            </div>
+          ) : (
+            <ul className="max-h-[280px] overflow-y-auto py-1">
+              {matches.map((s, i) => (
+                <li key={`${s.address}|${s.suburb}`}>
+                  <button
+                    type="button"
+                    onMouseEnter={() => setHighlight(i)}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      choose(s)
+                    }}
+                    className={
+                      'flex w-full items-start gap-2 px-3 py-2 text-left transition ' +
+                      (i === highlight ? 'bg-accent-tint' : 'hover:bg-canvas')
+                    }
+                  >
+                    <MapPin size={13} className="mt-0.5 shrink-0 text-ink-faint" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13px] font-medium text-ink">
+                        {s.address}
+                      </div>
+                      <div className="truncate text-[11.5px] text-ink-muted">
+                        {s.suburb} {s.postcode} · {s.type ?? 'Property'}
+                        {s.beds ? ` · ${s.beds}b ${s.baths ?? 0}b ${s.cars ?? 0}c` : ''}
+                      </div>
+                    </div>
+                    <span
+                      className={
+                        'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ' +
+                        (s.source === 'Recent appraisal'
+                          ? 'bg-accent-soft text-accent'
+                          : s.source === 'On market'
+                          ? 'bg-success-soft text-success'
+                          : 'bg-black/[0.05] text-ink-muted')
+                      }
+                    >
+                      {s.source}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PropertyStep({ state, setState }: { state: State; setState: (s: State) => void }) {
   const p = state.property
   const set = (patch: Partial<State['property']>) => setState({ ...state, property: { ...p, ...patch } })
@@ -759,10 +937,22 @@ function PropertyStep({ state, setState }: { state: State; setState: (s: State) 
 
       <div className="max-w-2xl space-y-4">
         <Field label="Street address" hint="Start typing — we'll match a listing">
-          <div className="relative">
-            <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
-            <input value={p.address} onChange={(e) => set({ address: e.target.value })} className={inputCls + ' pl-9'} />
-          </div>
+          <AddressAutosuggest
+            value={p.address}
+            onChange={(v) => set({ address: v })}
+            onPick={(s) =>
+              set({
+                address: s.address,
+                suburb: s.suburb,
+                postcode: s.postcode,
+                beds: s.beds ?? p.beds,
+                baths: s.baths ?? p.baths,
+                cars: s.cars ?? p.cars,
+                land: s.land ?? p.land,
+                type: s.type ?? p.type,
+              })
+            }
+          />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Suburb"><input value={p.suburb} onChange={(e) => set({ suburb: e.target.value })} className={inputCls} /></Field>

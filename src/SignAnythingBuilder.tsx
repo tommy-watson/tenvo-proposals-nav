@@ -77,15 +77,49 @@ const uid = () => Math.random().toString(36).slice(2, 10)
 export default function SignAnythingBuilder({
   onBack,
   onClose,
+  preloaded,
 }: {
   onBack: () => void
   onClose: () => void
+  preloaded?: { url: string; name: string }
 }) {
-  const [screen, setScreen] = useState<Screen>('upload')
+  const [screen, setScreen] = useState<Screen>(preloaded ? 'build' : 'upload')
   const [file, setFile] = useState<File | null>(null)
+  const [preloadError, setPreloadError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!preloaded || file) return
+    let cancelled = false
+    fetch(preloaded.url)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.blob()
+      })
+      .then((blob) => {
+        if (cancelled) return
+        setFile(new File([blob], preloaded.name, { type: 'application/pdf' }))
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setPreloadError(err instanceof Error ? err.message : 'Could not load template')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [preloaded, file])
 
   if (screen === 'sent') {
     return <SentScreen fileName={file?.name ?? 'Document'} onClose={onClose} />
+  }
+  if (screen === 'build' && !file) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col bg-canvas">
+        <TopBar onBack={onBack} onClose={onClose} eyebrow="Template" title={preloaded?.name ?? 'Loading'} />
+        <div className="flex flex-1 items-center justify-center text-[13px] text-ink-muted">
+          {preloadError ? `Couldn't load template: ${preloadError}` : 'Loading template…'}
+        </div>
+      </div>
+    )
   }
   if (screen === 'build' && file) {
     return (
