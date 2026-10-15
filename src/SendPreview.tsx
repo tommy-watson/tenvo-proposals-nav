@@ -62,7 +62,6 @@ function fillPlaceholders(text: string, firstName: string) {
 
 function EmailPreview({
   toName,
-  toEmail,
   greetingLine,
   note,
   property,
@@ -78,7 +77,6 @@ function EmailPreview({
   signerFirstName,
 }: {
   toName: string
-  toEmail: string
   greetingLine: string
   note: string
   property: Props['property']
@@ -395,7 +393,6 @@ export default function SendPreview({
               </div>
               <EmailPreview
                 toName={active?.name ?? ''}
-                toEmail={active?.email ?? ''}
                 greetingLine={greetingLine}
                 note={filledNote}
                 property={property}

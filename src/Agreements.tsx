@@ -1,19 +1,5 @@
 import { useMemo, useState } from 'react'
-import {
-  AlertCircle,
-  ArrowUpRight,
-  Check,
-  Circle,
-  Clock,
-  Download,
-  Eye,
-  FileSignature,
-  MoreHorizontal,
-  Plus,
-  Send,
-  ShieldCheck,
-  X,
-} from 'lucide-react'
+import { FileSignature, Plus } from 'lucide-react'
 import NewAgreementFlow from './NewAgreementFlow'
 
 type SigStatus = 'pending' | 'viewed' | 'signed' | 'declined'
